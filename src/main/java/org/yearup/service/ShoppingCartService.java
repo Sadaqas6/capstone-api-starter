@@ -1,11 +1,14 @@
 package org.yearup.service;
 
+import org.yearup.security.jwt.BadRequestException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.yearup.models.CartItem;
 import org.yearup.models.Product;
 import org.yearup.models.ShoppingCart;
 import org.yearup.models.ShoppingCartItem;
 import org.yearup.repository.ShoppingCartRepository;
+import org.yearup.security.jwt.ResourceNotFoundException;
 
 import java.util.List;
 
@@ -42,7 +45,16 @@ public class ShoppingCartService
     }
 
     public ShoppingCart addProduct(int userId, int productId){
-        CartItem existing = shoppingCartRepository.findByUserIdAndProductId(userId, productId);
+
+        // check product exists
+        Product product = productService.getById(productId);
+
+        if (product == null) {
+            throw new ResourceNotFoundException("Product not found");
+        }
+
+        CartItem existing = shoppingCartRepository
+                .findByUserIdAndProductId(userId, productId);
 
         if(existing == null){
             CartItem item = new CartItem();
@@ -55,20 +67,55 @@ public class ShoppingCartService
             existing.setQuantity(existing.getQuantity() + 1);
             shoppingCartRepository.save(existing);
         }
+
         return getByUserId(userId);
     }
 
     public ShoppingCart updateProductQuantity(int userId, int productId, int quantity){
-        CartItem existing = shoppingCartRepository.findByUserIdAndProductId(userId, productId);
 
-        if(existing != null){
-            existing.setQuantity(quantity);
-            shoppingCartRepository.save(existing);
+        if (quantity < 1) {
+            throw new BadRequestException("Quantity must be greater than 0");
         }
+
+        CartItem existing = shoppingCartRepository
+                .findByUserIdAndProductId(userId, productId);
+
+        if (existing == null) {
+            throw new ResourceNotFoundException("Product not found in cart");
+        }
+
+        existing.setQuantity(quantity);
+        shoppingCartRepository.save(existing);
+
         return getByUserId(userId);
     }
 
+    @Transactional
     public void clearCart(int userId){
         shoppingCartRepository.deleteByUserId(userId);
     }
+
+    public ShoppingCart decreaseItem(int productId, int userId)
+    {
+        CartItem existing = shoppingCartRepository
+                .findByUserIdAndProductId(userId, productId);
+
+        if (existing == null)
+        {
+            throw new ResourceNotFoundException("Product not in cart");
+        }
+
+        if (existing.getQuantity() > 1)
+        {
+            existing.setQuantity(existing.getQuantity() - 1);
+            shoppingCartRepository.save(existing);
+        }
+        else
+        {
+            shoppingCartRepository.delete(existing);
+        }
+
+        return getByUserId(userId);
+    }
+
 }
