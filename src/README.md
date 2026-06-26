@@ -40,7 +40,6 @@ Update `src/main/resources/application.properties` to point at the `littleattire
 
 ## Screenshots
 
-*(Add screenshots here: home page with product grid, cart page, profile page, and an Insomnia request/response example.)*
 
 ![Home page](screenshots/home.png)
 ![Cart page](screenshots/cart.png)
@@ -49,32 +48,42 @@ Update `src/main/resources/application.properties` to point at the `littleattire
 
 ## Interesting Code: Building the Shopping Cart from the Database
 
-One of the more interesting pieces of logic is in `ShoppingCartService.getByUserId()`. The `shopping_cart` table only stores `userId`, `productId`, and `quantity` — it doesn't store full product details. To return a cart that includes complete product information (name, price, description, image, etc.) for the frontend to render, each cart row has to be combined with a live lookup of its product:
+The starter frontend only had a login modal — there was no way for a new user to actually register through the UI, even though the backend already had a working `POST /register` endpoint. I added a full registration flow without needing to touch the backend at all, by reusing the existing modal pattern.
 
-```java
-public ShoppingCart getByUserId(int userId)
+`application.js` adds a function to open a second modal, alongside the existing login one:
+
+```javascript
+function showRegisterForm()
 {
-    ShoppingCart cart = new ShoppingCart();
-
-    List<CartItem> cartItems = shoppingCartRepository.findByUserId(userId);
-
-    for (CartItem cartItem : cartItems)
-    {
-        Product product = productService.getById(cartItem.getProductId());
-
-        ShoppingCartItem item = new ShoppingCartItem();
-        item.setProduct(product);
-        item.setQuantity(cartItem.getQuantity());
-
-        cart.add(item);
-    }
-
-    return cart;
+    templateBuilder.build('register-form', {}, 'login');
+}
+ 
+function register()
+{
+    const username = document.getElementById("register-username").value;
+    const password = document.getElementById("register-password").value;
+    const confirm = document.getElementById("register-confirm").value;
+ 
+    userService.register(username, password, confirm);
+    hideModalForm();
 }
 ```
 
-This same method is reused in three places: building the cart for `GET /cart`, rebuilding the cart after adding/updating a product so the response always reflects the latest state, and — most importantly — in `OrderService.createOrderFromCart()`, where the same cart-building logic is used to read out exactly what needs to become order line items at checkout. Keeping this logic in one method, rather than duplicating the join-and-build pattern in multiple places, meant the checkout feature could be built by composing existing, already-tested services rather than writing new lookup logic from scratch.
+The login and register modals now link to each other ("Create an account" / "Already have an account?"), and `UserService.register()` was updated so that a successful registration shows a confirmation message and automatically reopens the login modal, instead of just logging the response to the console:
 
+```javascript
+axios.post(url, register)
+     .then(response => {
+         const data = {
+             message: "Account created! You can now log in."
+         };
+ 
+         templateBuilder.append("message", data, "errors")
+         showLoginForm();
+     })
+```
+
+What made this interesting to build was realizing the backend was already fully capable of handling registration — `POST /register` worked from day one in Insomnia — but nobody could reach it from the actual website. The fix wasn't new backend logic at all; it was noticing a gap between what the API could do and what the UI exposed, then closing that gap by following the same modal-building pattern the login form already used
 ## Future Versions
 
 Features considered for future iterations, in rough priority order:
